@@ -7,17 +7,24 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Send, Bot, User, AlertTriangle } from 'lucide-react';
+import { Loader2, Send, Bot, User, AlertTriangle, Plus, MessageCircle, Trash2 } from 'lucide-react';
 import { Navigation } from '@/components/layout/navigation';
 import { useAuth } from '@/components/providers/auth-provider';
 import { useToast } from '@/hooks/use-toast';
 
 interface Message {
-  id: string;
+  role: 'user' | 'assistant';
   content: string;
-  sender: 'user' | 'ai';
   timestamp: Date;
-  sentiment?: 'positive' | 'negative' | 'neutral' | 'crisis';
+}
+
+interface Chat {
+  _id: string;
+  title: string;
+  messages: Message[];
+  createdAt: string;
+  updatedAt: string;
+  lastMessage: string;
 }
 
 export default function AICompanionPage() {
@@ -25,21 +32,18 @@ export default function AICompanionPage() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showCrisisAlert, setShowCrisisAlert] = useState(false);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+  const [loadingChats, setLoadingChats] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const { toast } = useToast();
 
   useEffect(() => {
-    // Initial greeting message
-    setMessages([
-      {
-        id: '1',
-        content: "Hello! I'm your AI companion here to listen and support you. Feel free to share what's on your mind - I'm here to help you process your emotions in a safe space.",
-        sender: 'ai',
-        timestamp: new Date(),
-      },
-    ]);
-  }, []);
+    if (user) {
+      loadChats();
+    }
+  }, [user]);
 
   useEffect(() => {
     scrollToBottom();
@@ -49,13 +53,112 @@ export default function AICompanionPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const loadChats = async () => {
+    try {
+      const response = await fetch('/api/ai/chats');
+      const data = await response.json();
+      if (data.success) {
+        setChats(data.chats);
+        if (data.chats.length === 0) {
+          // Create a new chat if none exist
+          await createNewChat();
+        } else {
+          // Load the most recent chat
+          const mostRecentChat = data.chats[0];
+          setCurrentChatId(mostRecentChat._id);
+          setMessages(mostRecentChat.messages.map((msg: any) => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp)
+          })));
+        }
+      }
+    } catch (error) {
+      console.error('Error loading chats:', error);
+    } finally {
+      setLoadingChats(false);
+    }
+  };
+
+  const createNewChat = async () => {
+    try {
+      const response = await fetch('/api/ai/chats', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ title: 'New Conversation' }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setCurrentChatId(data.chatId);
+        setMessages([
+          {
+            role: 'assistant',
+            content: "Hello! I'm your AI companion here to listen and support you. Feel free to share what's on your mind - I'm here to help you process your emotions in a safe space. 🌸",
+            timestamp: new Date(),
+          },
+        ]);
+        await loadChats(); // Refresh the chat list
+      }
+    } catch (error) {
+      console.error('Error creating new chat:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create new chat. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const loadChat = async (chatId: string) => {
+    try {
+      const response = await fetch(`/api/ai/chats/${chatId}/messages`);
+      const data = await response.json();
+      if (data.success) {
+        setCurrentChatId(chatId);
+        setMessages(data.messages.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        })));
+      }
+    } catch (error) {
+      console.error('Error loading chat:', error);
+    }
+  };
+
+  const deleteChat = async (chatId: string) => {
+    try {
+      const response = await fetch(`/api/ai/chats/${chatId}`, {
+        method: 'DELETE',
+      });
+      const data = await response.json();
+      if (data.success) {
+        if (currentChatId === chatId) {
+          // If we're deleting the current chat, create a new one
+          await createNewChat();
+        }
+        await loadChats(); // Refresh the chat list
+        toast({
+          title: "Chat deleted",
+          description: "The conversation has been removed.",
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete chat. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSendMessage = async () => {
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || !currentChatId) return;
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      role: 'user',
       content: input,
-      sender: 'user',
       timestamp: new Date(),
     };
 
@@ -69,27 +172,30 @@ export default function AICompanionPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: input }),
+        body: JSON.stringify({ 
+          message: input,
+          chatId: currentChatId 
+        }),
       });
 
       const data = await response.json();
 
-      if (data.error) {
-        throw new Error(data.error);
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to get response');
       }
 
       const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        role: 'assistant',
         content: data.response,
-        sender: 'ai',
         timestamp: new Date(),
-        sentiment: data.sentiment,
       };
 
       setMessages(prev => [...prev, aiMessage]);
 
-      // Check for crisis indicators
-      if (data.sentiment === 'crisis') {
+      // Check for crisis indicators (simple keyword detection)
+      const crisisKeywords = ['suicide', 'kill myself', 'end it all', 'not worth living', 'want to die'];
+      const lowerMessage = input.toLowerCase();
+      if (crisisKeywords.some(keyword => lowerMessage.includes(keyword))) {
         setShowCrisisAlert(true);
         toast({
           title: "Crisis Support Available",
@@ -97,6 +203,9 @@ export default function AICompanionPage() {
           variant: "destructive",
         });
       }
+
+      // Refresh chat list to update last message
+      await loadChats();
     } catch (error) {
       console.error('Error sending message:', error);
       toast({
@@ -131,11 +240,27 @@ export default function AICompanionPage() {
     );
   }
 
+  if (loadingChats) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+        <Navigation />
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-6xl mx-auto">
+            <div className="animate-pulse">
+              <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+              <div className="h-[700px] bg-gray-200 rounded"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       <Navigation />
       <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           {showCrisisAlert && (
             <Alert className="mb-6 border-red-200 bg-red-50">
               <AlertTriangle className="h-4 w-4 text-red-600" />
@@ -150,85 +275,149 @@ export default function AICompanionPage() {
             </Alert>
           )}
 
-          <Card className="h-[700px] flex flex-col">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bot className="h-6 w-6 text-purple-600" />
-                AI Companion
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col">
-              <ScrollArea className="flex-1 pr-4">
-                <div className="space-y-4">
-                  {messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`flex gap-3 ${
-                        message.sender === 'user' ? 'justify-end' : 'justify-start'
-                      }`}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Chat History Sidebar */}
+            <div className="lg:col-span-1">
+              <Card className="h-[700px] flex flex-col">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">Conversations</CardTitle>
+                    <Button size="sm" onClick={createNewChat}>
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="flex-1 p-0">
+                  <ScrollArea className="h-full px-4">
+                    <div className="space-y-2">
+                      {chats.map((chat) => (
+                        <div
+                          key={chat._id}
+                          className={`p-3 rounded-lg cursor-pointer transition-colors group ${
+                            currentChatId === chat._id
+                              ? 'bg-purple-100 border border-purple-200'
+                              : 'hover:bg-gray-100'
+                          }`}
+                          onClick={() => loadChat(chat._id)}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <MessageCircle className="h-4 w-4 text-purple-600 flex-shrink-0" />
+                                <h3 className="font-medium text-sm truncate">
+                                  {chat.title}
+                                </h3>
+                              </div>
+                              <p className="text-xs text-gray-500 truncate">
+                                {chat.lastMessage || 'No messages yet'}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-1">
+                                {new Date(chat.updatedAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 h-6 w-6 p-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteChat(chat._id);
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3 text-red-500" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Main Chat Area */}
+            <div className="lg:col-span-3">
+              <Card className="h-[700px] flex flex-col">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Bot className="h-6 w-6 text-purple-600" />
+                    MindfulChat AI Companion
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="flex-1 flex flex-col">
+                  <ScrollArea className="flex-1 pr-4">
+                    <div className="space-y-4">
+                      {messages.map((message, index) => (
+                        <div
+                          key={index}
+                          className={`flex gap-3 ${
+                            message.role === 'user' ? 'justify-end' : 'justify-start'
+                          }`}
+                        >
+                          {message.role === 'assistant' && (
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback className="bg-purple-100 text-purple-600">
+                                <Bot className="h-4 w-4" />
+                              </AvatarFallback>
+                            </Avatar>
+                          )}
+                          <div
+                            className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                              message.role === 'user'
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-gray-100 text-gray-900'
+                            }`}
+                          >
+                            <p className="whitespace-pre-wrap">{message.content}</p>
+                            <p className="text-xs mt-1 opacity-70">
+                              {message.timestamp.toLocaleTimeString()}
+                            </p>
+                          </div>
+                          {message.role === 'user' && (
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback className="bg-blue-100 text-blue-600">
+                                <User className="h-4 w-4" />
+                              </AvatarFallback>
+                            </Avatar>
+                          )}
+                        </div>
+                      ))}
+                      {isLoading && (
+                        <div className="flex gap-3 justify-start">
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback className="bg-purple-100 text-purple-600">
+                              <Bot className="h-4 w-4" />
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="bg-gray-100 px-4 py-2 rounded-lg">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          </div>
+                        </div>
+                      )}
+                      <div ref={messagesEndRef} />
+                    </div>
+                  </ScrollArea>
+                  <div className="mt-4 flex gap-2">
+                    <Input
+                      placeholder="Type your message..."
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyPress={handleKeyPress}
+                      disabled={isLoading || !currentChatId}
+                      className="flex-1"
+                    />
+                    <Button
+                      onClick={handleSendMessage}
+                      disabled={!input.trim() || isLoading || !currentChatId}
+                      size="icon"
                     >
-                      {message.sender === 'ai' && (
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback className="bg-purple-100 text-purple-600">
-                            <Bot className="h-4 w-4" />
-                          </AvatarFallback>
-                        </Avatar>
-                      )}
-                      <div
-                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                          message.sender === 'user'
-                            ? 'bg-purple-600 text-white'
-                            : 'bg-gray-100 text-gray-900'
-                        }`}
-                      >
-                        <p className="whitespace-pre-wrap">{message.content}</p>
-                        <p className="text-xs mt-1 opacity-70">
-                          {message.timestamp.toLocaleTimeString()}
-                        </p>
-                      </div>
-                      {message.sender === 'user' && (
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback className="bg-blue-100 text-blue-600">
-                            <User className="h-4 w-4" />
-                          </AvatarFallback>
-                        </Avatar>
-                      )}
-                    </div>
-                  ))}
-                  {isLoading && (
-                    <div className="flex gap-3 justify-start">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="bg-purple-100 text-purple-600">
-                          <Bot className="h-4 w-4" />
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="bg-gray-100 px-4 py-2 rounded-lg">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      </div>
-                    </div>
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-              </ScrollArea>
-              <div className="mt-4 flex gap-2">
-                <Input
-                  placeholder="Type your message..."
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  disabled={isLoading}
-                  className="flex-1"
-                />
-                <Button
-                  onClick={handleSendMessage}
-                  disabled={!input.trim() || isLoading}
-                  size="icon"
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </div>
       </div>
     </div>
