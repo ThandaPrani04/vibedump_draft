@@ -312,24 +312,9 @@ export default function PostDetailPage() {
                     onChange={(e) => setNewComment(e.target.value)}
                     rows={3}
                   />
-                  {commentError && (
-                    <Alert variant="destructive" className="mb-4">
-                      <AlertTriangle className="h-4 w-4" />
-                      <AlertDescription>{commentError}</AlertDescription>
-                    </Alert>
-                  )}
                   <Button onClick={handleSubmitComment} disabled={!newComment.trim() || isSubmitting}>
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Checking content...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="h-4 w-4 mr-2" />
-                        Post Comment
-                      </>
-                    )}
+                    <Send className="h-4 w-4 mr-2" />
+                    Post Comment
                   </Button>
                 </div>
               </CardContent>
