@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "check-env": "node scripts/check-env.js"
+    "check-env": "node scripts/check-env.js",
+    "setup": "npm install && npm run check-env"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

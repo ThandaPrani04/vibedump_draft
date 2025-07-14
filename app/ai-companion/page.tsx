@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Send, Bot, User, AlertTriangle, Plus, MessageCircle, Trash2 } from 'lucide-react';
+import { Loader2, Send, Bot, User, AlertTriangle, Plus, MessageCircle, Trash2, Mic, MicOff } from 'lucide-react';
 import { Navigation } from '@/components/layout/navigation';
 import { useAuth } from '@/components/providers/auth-provider';
 import { useToast } from '@/hooks/use-toast';
@@ -35,6 +35,9 @@ export default function AICompanionPage() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [loadingChats, setLoadingChats] = useState(true);
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const { toast } = useToast();
@@ -42,12 +45,68 @@ export default function AICompanionPage() {
   useEffect(() => {
     if (user) {
       loadChats();
+      checkSpeechSupport();
     }
   }, [user]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const checkSpeechSupport = () => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      setSpeechSupported(true);
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = 'en-US';
+      
+      recognitionRef.current.onstart = () => {
+        setIsListening(true);
+      };
+      
+      recognitionRef.current.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setInput(prev => prev + (prev ? ' ' : '') + transcript);
+        setIsListening(false);
+      };
+      
+      recognitionRef.current.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        setIsListening(false);
+        toast({
+          title: "Voice Recognition Error",
+          description: "Failed to recognize speech. Please try again.",
+          variant: "destructive",
+        });
+      };
+      
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+      };
+    } else {
+      setSpeechSupported(false);
+    }
+  };
+
+  const toggleVoiceRecording = () => {
+    if (!speechSupported) {
+      toast({
+        title: "Voice Not Supported",
+        description: "Your browser doesn't support voice recognition. Please use Chrome, Edge, or Safari.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current?.stop();
+    } else {
+      recognitionRef.current?.start();
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -398,8 +457,19 @@ export default function AICompanionPage() {
                     </div>
                   </ScrollArea>
                   <div className="mt-4 flex gap-2">
+                    {speechSupported && (
+                      <Button
+                        onClick={toggleVoiceRecording}
+                        disabled={isLoading || !currentChatId}
+                        size="icon"
+                        variant={isListening ? "destructive" : "outline"}
+                        className={isListening ? "animate-pulse" : ""}
+                      >
+                        {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                      </Button>
+                    )}
                     <Input
-                      placeholder="Type your message..."
+                      placeholder={speechSupported ? "Type your message or use voice..." : "Type your message..."}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyPress={handleKeyPress}
@@ -414,6 +484,13 @@ export default function AICompanionPage() {
                       <Send className="h-4 w-4" />
                     </Button>
                   </div>
+                  {isListening && (
+                    <div className="mt-2 text-center">
+                      <p className="text-sm text-purple-600 animate-pulse">
+                        🎤 Listening... Speak now
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

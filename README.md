@@ -6,6 +6,7 @@ VibeDump is a comprehensive mental health platform that provides a safe space fo
 
 ### 🤖 AI Venting Companion
 - 24/7 empathetic AI chat support
+- Voice-to-text input for hands-free interaction
 - Sentiment analysis and crisis detection
 - Personalized responses based on emotional state
 - Crisis resource provision when needed
@@ -112,6 +113,7 @@ npm run dev
 
 ### AI Companion
 - Uses OpenAI GPT-3.5 Turbo for conversational AI
+- Voice-to-text input using Web Speech API
 - Includes system prompts for empathetic responses
 - Sentiment analysis for message classification
 - Crisis keyword detection with immediate resource provision

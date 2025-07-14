@@ -148,10 +148,12 @@ node -e "console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'Set' : 'Missing'
 
 ✅ **User Authentication** (Supabase Auth)  
 ✅ **AI Companion Chat** (Google Gemini)  
+✅ **Voice-to-Text** (Web Speech API)  
 ✅ **Support Communities** (Supabase Database)  
 ✅ **Blog Hub** (Web Scraping)  
 ✅ **Chat History** (MongoDB)  
 ✅ **Crisis Detection** (AI-powered)  
+✅ **Content Moderation** (Hugging Face Toxic-BERT)  
 
 ## Development Tips
 
@@ -159,6 +161,8 @@ node -e "console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'Set' : 'Missing'
 2. **API Testing**: Use tools like Postman to test API endpoints
 3. **Database Inspection**: Use MongoDB Compass or Supabase dashboard
 4. **Logs**: Check the terminal for error messages and logs
+5. **Voice Feature**: Works best in Chrome, Edge, or Safari browsers
+6. **HTTPS**: Voice recognition requires HTTPS in production (works on localhost)
 
 ## Production Deployment
 
@@ -166,6 +170,8 @@ When ready to deploy:
 1. Update environment variables for production
 2. Use `npm run build` to create production build
 3. Deploy to platforms like Vercel, Netlify, or your preferred hosting
+4. **Important**: Voice-to-text requires HTTPS in production
+5. Ensure all API keys are properly configured
 
 ## Support
 
@@ -174,5 +180,7 @@ If you encounter issues:
 2. Verify all environment variables are set correctly
 3. Ensure all required services (MongoDB, Supabase) are accessible
 4. Check the GitHub issues for similar problems
+5. **Voice Issues**: Ensure you're using a supported browser (Chrome/Edge/Safari)
+6. **Microphone**: Grant microphone permissions when prompted
 
 Happy coding! 🚀
