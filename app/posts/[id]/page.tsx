@@ -55,6 +55,7 @@ export default function PostDetailPage() {
   const [newComment, setNewComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [commentError, setCommentError] = useState('');
 
   useEffect(() => {
     if (params.id) {
@@ -150,10 +151,44 @@ export default function PostDetailPage() {
     }
   };
 
+  const checkToxicity = async (text: string): Promise<{ isToxic: boolean; message?: string }> => {
+    try {
+      const response = await fetch('/api/moderation/toxic-check', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Toxicity check failed:', error);
+      return { isToxic: false }; // Fail-safe: allow content if check fails
+    }
+  };
+
   const handleSubmitComment = async () => {
     if (!user || !newComment.trim()) return;
+    
     setIsSubmitting(true);
+    setCommentError('');
+
     try {
+      // Check toxicity of comment
+      const toxicityCheck = await checkToxicity(newComment);
+      
+      if (toxicityCheck.isToxic) {
+        setCommentError('Post flagged for toxic behavior');
+        toast({
+          title: "Comment Flagged",
+          description: "Your comment contains inappropriate content. Please revise and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { error } = await supabase.from('comments').insert({
         post_id: params.id,
         user_id: user.id,
@@ -277,11 +312,17 @@ export default function PostDetailPage() {
                     onChange={(e) => setNewComment(e.target.value)}
                     rows={3}
                   />
+                  {commentError && (
+                    <Alert variant="destructive" className="mb-4">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription>{commentError}</AlertDescription>
+                    </Alert>
+                  )}
                   <Button onClick={handleSubmitComment} disabled={!newComment.trim() || isSubmitting}>
                     {isSubmitting ? (
                       <>
-                        <Clock className="h-4 w-4 mr-2" />
-                        Posting...
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Checking content...
                       </>
                     ) : (
                       <>

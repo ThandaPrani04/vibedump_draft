@@ -6,44 +6,84 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Navigation } from '@/components/layout/navigation';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useToast } from '@/hooks/use-toast';
 
 export default function CreatePostPage() {
   const params = useParams();
   const router = useRouter();
+  const { toast } = useToast();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  console.log(params.id);
+  const checkToxicity = async (text: string): Promise<{ isToxic: boolean; message?: string }> => {
+    try {
+      const response = await fetch('/api/moderation/toxic-check', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Toxicity check failed:', error);
+      return { isToxic: false }; // Fail-safe: allow content if check fails
+    }
+  };
 
   const handleCreatePost = async () => {
-    console.log('iamhere');
     if (!title || !content) {
       setError('Please provide both title and content.');
       return;
     }
 
-    console.log('Creating post with title:', title, 'and content:', content);
     setLoading(true);
     setError('');
 
     try {
-      console.log('Creating post with title:', title, 'and content:', content);
+      // Check toxicity of title and content
+      const titleCheck = await checkToxicity(title);
+      const contentCheck = await checkToxicity(content);
+
+      if (titleCheck.isToxic) {
+        setError('Post flagged for toxic behavior in title');
+        toast({
+          title: "Content Flagged",
+          description: "Your post title contains inappropriate content. Please revise and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (contentCheck.isToxic) {
+        setError('Post flagged for toxic behavior in content');
+        toast({
+          title: "Content Flagged",
+          description: "Your post content contains inappropriate content. Please revise and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       // Validate community ID
       if (!params.id) {
         throw new Error('Community ID is required.');
       }
+
       // Fetch user
       const {
         data: { user },
         error: userError,
       } = await supabase.auth.getUser();
       
-      console.log('User:', user);
-      console.log('User Error:', userError);
       if (userError || !user) {
         throw new Error('User not authenticated');
       }
@@ -54,14 +94,7 @@ export default function CreatePostPage() {
       if (!uuidRegex.test(communityId as string)) {
         throw new Error('Invalid community ID');
       }
-      console.log('Community ID:', communityId);
 
-      console.log('Inserting post with', {
-        title,
-        content,
-        community_id: communityId,
-        user_id: user.id,
-      });
       // Insert post
       const { error: insertError } = await supabase.from('posts').insert([
         {
@@ -73,21 +106,20 @@ export default function CreatePostPage() {
       ]);
 
       if (insertError) throw insertError;
-            if (insertError) {
-        console.error('Supabase Insert Error:', insertError);
-        throw insertError;
-      }
+
+      toast({
+        title: "Post Created",
+        description: "Your post has been published successfully.",
+      });
 
       router.push(`/communities/${communityId}`);
     } catch (err: any) {
       console.error('Error creating post:', err.message || err);
-      setError('Failed to create post.');
+      setError(err.message || 'Failed to create post.');
     } finally {
       setLoading(false);
     }
   };
-
-
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -110,10 +142,12 @@ export default function CreatePostPage() {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
               />
-              {error && <p className="text-red-500 text-sm">{error}</p>}
-              {/* <Button type="button" onClick={handleCreatePost} disabled={loading}>
-                {loading ? 'Posting...' : 'Post'}
-              </Button> */}
+              {error && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
               <Button
                 type="button"
                 onClick={(e) => {
@@ -122,7 +156,14 @@ export default function CreatePostPage() {
                 }}
                 disabled={loading}
               >
-                {loading ? 'Posting...' : 'Post'}
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Checking content...
+                  </>
+                ) : (
+                  'Post'
+                )}
               </Button>
             </CardContent>
           </Card>

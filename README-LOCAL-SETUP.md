@@ -37,6 +37,9 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhY
 # Google Generative AI Configuration (YOU NEED TO ADD THIS)
 GEMINI_API_KEY=your_actual_gemini_api_key_here
 
+# Hugging Face API Configuration (YOU NEED TO ADD THIS)
+HUGGINGFACE_API_KEY=your_actual_huggingface_api_key_here
+
 # MongoDB Configuration (YOU NEED TO ADD THIS)
 MONGODB_URI=your_mongodb_connection_string_here
 
@@ -55,7 +58,15 @@ NEXTAUTH_SECRET=your_nextauth_secret_here
 4. Create a new API key
 5. Copy the key and add it to your `.env` file as `GEMINI_API_KEY`
 
-### 3.2 MongoDB Database
+### 3.2 Hugging Face API Key
+
+1. Go to [Hugging Face](https://huggingface.co/)
+2. Create a free account
+3. Go to Settings > Access Tokens
+4. Create a new token with "Read" permissions
+5. Copy the token and add it to your `.env` file as `HUGGINGFACE_API_KEY`
+
+### 3.3 MongoDB Database
 
 **Option A: MongoDB Atlas (Recommended for beginners)**
 1. Go to [MongoDB Atlas](https://www.mongodb.com/atlas)
@@ -69,7 +80,7 @@ NEXTAUTH_SECRET=your_nextauth_secret_here
 2. Start MongoDB service
 3. Use connection string: `mongodb://localhost:27017/mindfulchat`
 
-### 3.3 NextAuth Secret (Optional but recommended)
+### 3.4 NextAuth Secret (Optional but recommended)
 ```bash
 # Generate a random secret
 openssl rand -base64 32
